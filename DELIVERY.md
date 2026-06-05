@@ -31,7 +31,8 @@
 │   ├── services/          # 业务逻辑层
 │   ├── routes/            # API 路由层
 │   ├── database.ts        # 数据库初始化
-│   ├── server.ts          # 服务入口
+│   ├── server.ts          # 服务入口（仅用于本地开发）
+│   ├── bootstrap.ts       # 容器启动入口（含数据初始化）
 │   └── seed.ts            # 种子数据脚本
 ├── shared/                # 前后端共享类型
 │   └── types.ts
@@ -40,9 +41,10 @@
 │   ├── pages/             # 页面组件
 │   ├── store/             # Zustand 状态管理
 │   └── App.tsx            # 路由配置
+├── dist/                  # 前端构建产物（build 后生成）
 ├── data/                  # 数据库文件目录（自动创建）
-├── Dockerfile             # 容器镜像构建
-├── docker-compose.yml     # 容器编排
+├── Dockerfile             # 多阶段容器镜像构建
+├── docker-compose.yml     # 容器编排（含健康检查+数据卷）
 └── package.json           # 项目依赖
 ```
 
@@ -82,9 +84,11 @@ docker run -d \
 
 ### 访问地址
 
-- 前端应用：http://localhost:3001
+- 前端应用（静态文件由后端服务提供）：http://localhost:3001
 - 后端 API：http://localhost:3001/api
 - 健康检查：http://localhost:3001/api/health
+
+**说明**：前端构建产物位于 `/app/dist` 目录，由 Express 通过 `express.static()` 中间件提供静态文件服务，所有非 `/api/*` 路径均返回 SPA 单页应用的 `index.html`，支持前端路由。
 
 ---
 
@@ -92,35 +96,43 @@ docker run -d \
 
 ### 4.1 数据库自动初始化
 
-系统启动时会自动执行以下操作：
+容器启动时通过 `api/bootstrap.ts` 自动执行以下操作：
 
-1. 检测 `data/meddevice.db` 是否存在
+1. 检测 `/app/data/meddevice.db` 是否存在
 2. 如不存在则创建数据库文件
 3. 自动创建三张核心表：
    - `adverse_events` - 不良事件主表
    - `rectifications` - 整改任务表
    - `event_status_log` - 状态流转日志表
 4. 创建必要的索引优化查询性能
+5. **自动执行种子数据初始化**（通过环境变量 `SEED_ON_STARTUP=true` 控制）
 
-### 4.2 手动执行种子数据
+### 4.2 种子数据
 
-容器首次启动后，如需初始化演示数据：
+容器首次启动时会自动初始化演示数据：
+- 5 条不良事件记录（2 条严重、1 条特别严重、2 条一般）
+- 3 条整改任务（覆盖待执行、已关闭等状态）
 
+**手动重新执行种子数据**：
 ```bash
 # 进入容器
 docker exec -it meddevice-app bash
 
 # 执行种子数据脚本
-npm run seed
+node --import tsx api/seed.ts
 ```
-
-种子数据包含：
-- 5 条不良事件记录（2 条严重、1 条特别严重、2 条一般）
-- 3 条整改任务（覆盖待执行、已关闭等状态）
 
 ### 4.3 数据持久化
 
 数据库文件存储于容器内 `/app/data/meddevice.db`，通过 docker-compose 的数据卷映射到宿主机 `./data/` 目录，保证容器重建数据不丢失。
+
+### 4.4 环境变量说明
+
+| 变量名 | 默认值 | 说明 |
+|--------|--------|------|
+| `PORT` | 3001 | 服务监听端口 |
+| `NODE_ENV` | production | 运行环境 |
+| `SEED_ON_STARTUP` | true | 启动时是否自动执行种子数据 |
 
 ---
 
@@ -146,15 +158,15 @@ curl http://localhost:3001/api/health
 
 ### 5.2 Docker 容器健康检查
 
-`docker-compose.yml` 已内置健康检查配置：
+`docker-compose.yml` 已内置健康检查配置（使用 Node.js 内置 fetch，无需 curl）：
 
 ```yaml
 healthcheck:
-  test: ["CMD", "curl", "-f", "http://localhost:3001/api/health"]
+  test: ["CMD", "node", "--input-type=module", "-e", "const r = await fetch('http://localhost:3001/api/health'); process.exit(r.ok ? 0 : 1)"]
   interval: 30s
   timeout: 10s
   retries: 3
-  start_period: 10s
+  start_period: 20s
 ```
 
 查看健康状态：

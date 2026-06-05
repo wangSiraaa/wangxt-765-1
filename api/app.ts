@@ -38,11 +38,18 @@ app.use((error: Error, req: Request, res: Response, next: NextFunction) => {
   })
 })
 
-app.use((req: Request, res: Response) => {
-  res.status(404).json({
-    success: false,
-    error: 'API not found',
-  })
+const distPath = path.resolve(__dirname, '..', 'dist')
+app.use(express.static(distPath))
+
+app.get('*', (req: Request, res: Response) => {
+  if (req.path.startsWith('/api/')) {
+    res.status(404).json({
+      success: false,
+      error: 'API not found',
+    })
+    return
+  }
+  res.sendFile(path.join(distPath, 'index.html'))
 })
 
 export default app
