@@ -1,8 +1,5 @@
-import { initDatabase } from './database.js'
-import { exec } from 'child_process'
-import { promisify } from 'util'
-
-const execAsync = promisify(exec)
+import { initDatabase, closeDatabase } from './database.js'
+import { runSeed, hasSeedData } from './seed.js'
 
 async function bootstrap() {
   try {
@@ -10,15 +7,16 @@ async function bootstrap() {
     console.log('Database initialized successfully')
 
     if (process.env.SEED_ON_STARTUP === 'true') {
-      console.log('Running seed data initialization...')
-      try {
-        await execAsync('node --import tsx api/seed.ts', {
-          cwd: '/app',
-          env: process.env,
-        })
-        console.log('Seed data completed successfully')
-      } catch (seedError: any) {
-        console.warn('Seed data warning (may already exist):', seedError.message)
+      if (hasSeedData()) {
+        console.log('Database already has data, skipping seed initialization')
+      } else {
+        console.log('Running seed data initialization...')
+        try {
+          await runSeed()
+          console.log('Seed data completed successfully')
+        } catch (seedError: any) {
+          console.warn('Seed data warning (may already exist):', seedError.message)
+        }
       }
     }
 
@@ -33,6 +31,7 @@ async function bootstrap() {
 
     process.on('SIGTERM', () => {
       console.log('SIGTERM signal received')
+      closeDatabase()
       server.close(() => {
         console.log('Server closed')
         process.exit(0)
@@ -41,6 +40,7 @@ async function bootstrap() {
 
     process.on('SIGINT', () => {
       console.log('SIGINT signal received')
+      closeDatabase()
       server.close(() => {
         console.log('Server closed')
         process.exit(0)

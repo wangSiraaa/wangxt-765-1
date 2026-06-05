@@ -1,9 +1,8 @@
-import { initDatabase, closeDatabase, saveDatabase } from './database.js'
-import { createEvent } from './services/eventService.js'
-import { createRectification } from './services/eventService.js'
+import { initDatabase, closeDatabase, saveDatabase, getDatabase } from './database.js'
+import { createEvent, createRectification } from './services/eventService.js'
 import type { CreateEventInput, CreateRectificationInput } from '../shared/types.js'
 
-async function seed() {
+export async function runSeed(): Promise<void> {
   console.log('Initializing database...')
   await initDatabase()
 
@@ -125,7 +124,24 @@ async function seed() {
 
   saveDatabase()
   console.log('Seed data created successfully!')
-  closeDatabase()
 }
 
-seed().catch(console.error)
+export function hasSeedData(): boolean {
+  try {
+    const db = getDatabase()
+    const result = db.exec('SELECT COUNT(*) as count FROM adverse_events')
+    if (result && result[0] && result[0].values && result[0].values[0]) {
+      const count = result[0].values[0][0] as number
+      return count > 0
+    }
+    return false
+  } catch {
+    return false
+  }
+}
+
+if (process.argv[1] && process.argv[1].includes('seed')) {
+  runSeed()
+    .then(() => closeDatabase())
+    .catch(console.error)
+}
