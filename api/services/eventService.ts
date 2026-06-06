@@ -164,6 +164,13 @@ export function updateEventStatus(id: string, newStatus: string, operator: strin
   const event = getEventByIdRaw(id)
   if (!event) return null
 
+  if (newStatus === '已归档') {
+    const check = checkArchiveEligibility(id)
+    if (!check.can_archive) {
+      throw new Error(check.warning_message || '整改未关闭，不能归档')
+    }
+  }
+
   const now = new Date().toISOString().replace('T', ' ').slice(0, 19)
   db.run('UPDATE adverse_events SET status = ?, updated_at = ? WHERE id = ?', [newStatus, now, id])
   logStatusChange(id, event.status, newStatus, operator, remark)
@@ -256,6 +263,15 @@ export function closeRectification(id: string): Rectification | null {
 
   const now = new Date().toISOString().replace('T', ' ').slice(0, 19)
   db.run("UPDATE rectifications SET status = '已关闭', closed_at = ? WHERE id = ?", [now, id])
+  
+  const event = getEventByIdRaw(existing.event_id)
+  if (event && event.status === '整改中') {
+    const checkResult = checkArchiveEligibility(existing.event_id)
+    if (checkResult.can_archive) {
+      updateEventStatus(existing.event_id, '审核通过', '系统', '所有整改任务已关闭，自动流转至审核通过')
+    }
+  }
+  
   saveDatabase()
   return getRectificationById(id)
 }

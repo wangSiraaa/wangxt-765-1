@@ -102,7 +102,7 @@ router.put('/events/:id/status', (req: Request, res: Response) => {
     }
     res.json({ code: 0, message: '状态更新成功', data: event })
   } catch (error: any) {
-    res.status(500).json({ code: 500, message: error.message, data: null })
+    res.status(400).json({ code: 400, message: error.message, data: null })
   }
 })
 

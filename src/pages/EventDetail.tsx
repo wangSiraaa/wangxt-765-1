@@ -30,8 +30,12 @@ export default function EventDetail() {
 
   const handleStatusChange = async (status: string, remark: string) => {
     if (!id) return
-    await store.updateEventStatus(id, status, '管理员', remark)
-    store.fetchEventDetail(id)
+    try {
+      await store.updateEventStatus(id, status, '管理员', remark)
+      store.fetchEventDetail(id)
+    } catch (error: any) {
+      alert(error.message || '状态更新失败')
+    }
   }
 
   const handleArchive = async () => {

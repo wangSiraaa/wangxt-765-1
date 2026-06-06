@@ -114,6 +114,8 @@ export const useEventStore = create<EventState>((set, get) => ({
     const json = await res.json()
     if (json.code === 0) {
       set({ currentEvent: json.data })
+    } else {
+      throw new Error(json.message || '状态更新失败')
     }
   },
 
@@ -170,7 +172,7 @@ export const useEventStore = create<EventState>((set, get) => ({
     if (json.code === 0) {
       const { currentEvent } = get()
       if (currentEvent) {
-        get().fetchEventDetail(currentEvent.id)
+        await get().fetchEventDetail(currentEvent.id)
       }
     }
   },
